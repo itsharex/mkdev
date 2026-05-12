@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -54,6 +55,9 @@ type rootModel struct {
 	width       int
 	height      int
 	domains     tabs.Domains
+	logs        tabs.Logs
+	doctor      tabs.Doctor
+	settings    tabs.Settings
 	modals      []any // LIFO stack of modals.Add / modals.Edit / modals.Confirm
 	proxy       ProxyState
 	proxyCh     <-chan ProxyState
@@ -83,14 +87,18 @@ func newRootModel(rt *Runtime) rootModel {
 	sp.Spinner = spinner.Dot
 	sp.Style = th.Title
 
+	logPath := filepath.Join(rt.Home, "logs", "tui.log")
 	return rootModel{
-		rt:      rt,
-		th:      th,
-		domains: tabs.NewDomains(th, 100, 24),
-		binPath: bp,
-		keys:    DefaultKeyMap,
-		help:    h,
-		spinner: sp,
+		rt:       rt,
+		th:       th,
+		domains:  tabs.NewDomains(th, 100, 24),
+		logs:     tabs.NewLogs(th, logPath),
+		doctor:   tabs.NewDoctor(th, rt.Home),
+		settings: tabs.NewSettings(th, rt.Home),
+		binPath:  bp,
+		keys:     DefaultKeyMap,
+		help:     h,
+		spinner:  sp,
 	}
 }
 
@@ -103,6 +111,7 @@ func (m rootModel) Init() tea.Cmd {
 		func() tea.Msg { return proxyStartedMsg{ch: m.rt.StartProxy()} },
 		m.rt.RefreshTick(0),
 		m.spinner.Tick,
+		m.logs.Init(),
 	)
 }
 
@@ -128,7 +137,19 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.help.Width = msg.Width
 		var cmd tea.Cmd
 		m.domains, cmd = m.domains.Update(msg)
+		m.logs, _ = m.logs.Update(msg)
+		m.doctor, _ = m.doctor.Update(msg)
+		m.settings, _ = m.settings.Update(msg)
 		return m, cmd
+
+	case tabs.LogsTickMsg:
+		var cmd tea.Cmd
+		m.logs, cmd = m.logs.Update(msg)
+		return m, cmd
+
+	case tabs.SettingsSavedMsg:
+		m.rt.Cfg = msg.Cfg
+		return m, nil
 
 	case proxyStartedMsg:
 		m.proxyCh = msg.ch
@@ -217,7 +238,7 @@ func (m rootModel) handleGlobalKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.active != tabDomains {
-		return m, nil
+		return m.forwardToActiveTab(k)
 	}
 	switch {
 	case key.Matches(k, m.keys.Add):
@@ -247,6 +268,21 @@ func (m rootModel) handleGlobalKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	var cmd tea.Cmd
 	m.domains, cmd = m.domains.Update(k)
+	return m, cmd
+}
+
+// forwardToActiveTab routes msg to the currently focused tab's Update. The
+// Domains tab is handled inline by handleGlobalKey, so it is not included here.
+func (m rootModel) forwardToActiveTab(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	switch m.active {
+	case tabLogs:
+		m.logs, cmd = m.logs.Update(msg)
+	case tabDoctor:
+		m.doctor, cmd = m.doctor.Update(msg)
+	case tabSettings:
+		m.settings, cmd = m.settings.Update(msg)
+	}
 	return m, cmd
 }
 
@@ -429,11 +465,14 @@ func (m rootModel) View() string {
 	switch m.active {
 	case tabDomains:
 		body = m.domains.View()
-	default:
-		body = m.th.Dim.Render("  this tab is not implemented yet — switch back to Domains with ") +
-			m.th.FooterKey.Render("1") +
-			m.th.Dim.Render(" or ") +
-			m.th.FooterKey.Render("shift+tab")
+	case tabProjects:
+		body = m.th.Dim.Render("Projects — coming in the next release")
+	case tabLogs:
+		body = m.logs.View()
+	case tabDoctor:
+		body = m.doctor.View()
+	case tabSettings:
+		body = m.settings.View()
 	}
 	if m.busy {
 		body = m.spinner.View() + " " + m.th.Dim.Render("working…") + "\n" + body
