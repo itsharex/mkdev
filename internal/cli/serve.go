@@ -78,7 +78,7 @@ func runServe(cmd *cobra.Command, _ []string) error {
 		}
 	})
 
-	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.ProxyPort))
+	addr := net.JoinHostPort("0.0.0.0", strconv.Itoa(cfg.ProxyPort))
 	ln, err := tls.Listen("tcp", addr, &tls.Config{
 		GetCertificate: is.GetCertificate,
 		MinVersion:     tls.VersionTLS13,

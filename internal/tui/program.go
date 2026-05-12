@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -15,8 +14,6 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/venkatkrishna07/mkdev/internal/hosts"
-	"github.com/venkatkrishna07/mkdev/internal/store"
 	"github.com/venkatkrishna07/mkdev/internal/tui/components"
 	"github.com/venkatkrishna07/mkdev/internal/tui/modals"
 	"github.com/venkatkrishna07/mkdev/internal/tui/styles"
@@ -69,11 +66,16 @@ type rootModel struct {
 	busy        bool
 	active      tabIndex
 	pendingQuit bool
+	lastErr     error
+	lastErrAt   time.Time
 }
 
 func newRootModel(rt *Runtime) rootModel {
 	th := styles.NewTheme()
-	bp, _ := os.Executable()
+	bp, err := os.Executable()
+	if err != nil || bp == "" {
+		panic("tui: cannot resolve mkdev binary path: " + fmt.Sprint(err))
+	}
 
 	h := help.New()
 	h.Styles.ShortKey = th.FooterKey
@@ -106,6 +108,13 @@ func newRootModel(rt *Runtime) rootModel {
 // persists across model copies (Init's value-receiver mutations are discarded).
 type proxyStartedMsg struct{ ch <-chan ProxyState }
 
+// errMsg lets us deliver an error through the tea.Cmd pipeline. The root
+// Update captures it as a transient toast in the footer area.
+type errMsg error
+
+// errExpiredMsg is delivered ~5s after an errMsg to clear the toast.
+type errExpiredMsg struct{}
+
 func (m rootModel) Init() tea.Cmd {
 	return tea.Batch(
 		func() tea.Msg { return proxyStartedMsg{ch: m.rt.StartProxy()} },
@@ -135,12 +144,12 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.help.Width = msg.Width
-		var cmd tea.Cmd
-		m.domains, cmd = m.domains.Update(msg)
-		m.logs, _ = m.logs.Update(msg)
-		m.doctor, _ = m.doctor.Update(msg)
-		m.settings, _ = m.settings.Update(msg)
-		return m, cmd
+		var dCmd, lCmd, docCmd, sCmd tea.Cmd
+		m.domains, dCmd = m.domains.Update(msg)
+		m.logs, lCmd = m.logs.Update(msg)
+		m.doctor, docCmd = m.doctor.Update(msg)
+		m.settings, sCmd = m.settings.Update(msg)
+		return m, tea.Batch(dCmd, lCmd, docCmd, sCmd)
 
 	case tabs.LogsTickMsg:
 		var cmd tea.Cmd
@@ -167,7 +176,15 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case errMsg:
 		m.busy = false
+		m.lastErr = error(msg)
+		m.lastErrAt = time.Now()
 		slog.Error("tui: mutation failed", "err", error(msg))
+		return m, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return errExpiredMsg{} })
+
+	case errExpiredMsg:
+		if time.Since(m.lastErrAt) >= 5*time.Second {
+			m.lastErr = nil
+		}
 		return m, nil
 
 	case spinner.TickMsg:
@@ -265,6 +282,12 @@ func (m rootModel) handleGlobalKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(m.toggleRoute(r), m.spinner.Tick)
 		}
 		return m, nil
+	case key.Matches(k, m.keys.Share):
+		if r, ok := m.domains.Selected(); ok {
+			m.busy = true
+			return m, tea.Batch(m.toggleShare(r), m.spinner.Tick)
+		}
+		return m, nil
 	case key.Matches(k, m.keys.Open):
 		if r, ok := m.domains.Selected(); ok {
 			return m, openInBrowser(r.Domain, m.rt.Cfg.ProxyPort)
@@ -276,178 +299,17 @@ func (m rootModel) handleGlobalKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// forwardToActiveTab routes msg to the currently focused tab's Update. The
-// Domains tab is handled inline by handleGlobalKey, so it is not included here.
-func (m rootModel) forwardToActiveTab(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	switch m.active {
-	case tabLogs:
-		m.logs, cmd = m.logs.Update(msg)
-	case tabDoctor:
-		m.doctor, cmd = m.doctor.Update(msg)
-	case tabSettings:
-		m.settings, cmd = m.settings.Update(msg)
-	}
-	return m, cmd
-}
-
-func (m rootModel) updateTopModal(msg tea.Msg) (tea.Model, tea.Cmd) {
-	idx := len(m.modals) - 1
-	var cmd tea.Cmd
-	switch t := m.modals[idx].(type) {
-	case modals.Add:
-		t, cmd = t.Update(msg)
-		m.modals[idx] = t
-	case modals.Edit:
-		t, cmd = t.Update(msg)
-		m.modals[idx] = t
-	case modals.Confirm:
-		t, cmd = t.Update(msg)
-		m.modals[idx] = t
-	}
-	return m, cmd
-}
-
-func (m rootModel) handleModalResult(closedModal any, r modals.Result) tea.Cmd {
-	_ = closedModal
-	if r.Cancelled {
-		return nil
-	}
-	switch p := r.Payload.(type) {
-	case modals.AddPayload:
-		return m.commitAdd(p)
-	case modals.EditPayload:
-		return m.commitEdit(p)
-	case bool:
-		if !p {
-			return nil
-		}
-		if sel, ok := m.domains.Selected(); ok {
-			return m.commitDelete(sel)
-		}
-	}
-	return nil
-}
-
-func (m rootModel) commitAdd(p modals.AddPayload) tea.Cmd {
-	return func() tea.Msg {
-		if !hosts.ValidHostname(p.Domain) {
-			return errMsg(fmt.Errorf("invalid domain %q", p.Domain))
-		}
-		s, err := m.rt.OpenStore()
-		if err != nil {
-			return errMsg(err)
-		}
-		defer s.Close()
-		if _, err := s.GetRoute(p.Domain); err == nil {
-			return errMsg(fmt.Errorf("route exists: %s", p.Domain))
-		} else if !errors.Is(err, store.ErrNotFound) {
-			return errMsg(err)
-		}
-		editor := hosts.NewGUIEditor(m.binPath)
-		if err := editor.Add(p.Domain); err != nil {
-			return errMsg(fmt.Errorf("hosts: %w", err))
-		}
-		r := store.Route{Domain: p.Domain, Target: p.Target, TLD: p.TLD, Enabled: true, Source: store.SourceAdHoc, AddedAt: time.Now().UTC()}
-		if err := s.PutRoute(r); err != nil {
-			_ = editor.Remove(p.Domain)
-			return errMsg(err)
-		}
-		rs, err := s.ListRoutes()
-		m.rt.Router.Set(rs)
-		return RoutesRefreshed{Routes: rs, Err: err}
-	}
-}
-
-func (m rootModel) commitEdit(p modals.EditPayload) tea.Cmd {
-	return func() tea.Msg {
-		s, err := m.rt.OpenStore()
-		if err != nil {
-			return errMsg(err)
-		}
-		defer s.Close()
-		cur, err := s.GetRoute(p.Domain)
-		if err != nil {
-			return errMsg(err)
-		}
-		cur.Target = p.Target
-		if err := s.PutRoute(cur); err != nil {
-			return errMsg(err)
-		}
-		rs, _ := s.ListRoutes()
-		m.rt.Router.Set(rs)
-		return RoutesRefreshed{Routes: rs}
-	}
-}
-
-func (m rootModel) commitDelete(r store.Route) tea.Cmd {
-	return func() tea.Msg {
-		s, err := m.rt.OpenStore()
-		if err != nil {
-			return errMsg(err)
-		}
-		defer s.Close()
-		editor := hosts.NewGUIEditor(m.binPath)
-		if err := editor.Remove(r.Domain); err != nil {
-			return errMsg(fmt.Errorf("hosts: %w", err))
-		}
-		if err := s.DeleteRoute(r.Domain); err != nil {
-			_ = editor.Add(r.Domain)
-			return errMsg(err)
-		}
-		rs, _ := s.ListRoutes()
-		m.rt.Router.Set(rs)
-		return RoutesRefreshed{Routes: rs}
-	}
-}
-
-func (m rootModel) toggleRoute(r store.Route) tea.Cmd {
-	return func() tea.Msg {
-		s, err := m.rt.OpenStore()
-		if err != nil {
-			return errMsg(err)
-		}
-		defer s.Close()
-		r.Enabled = !r.Enabled
-		if err := s.PutRoute(r); err != nil {
-			return errMsg(err)
-		}
-		rs, _ := s.ListRoutes()
-		m.rt.Router.Set(rs)
-		return RoutesRefreshed{Routes: rs}
-	}
-}
-
 func openInBrowser(domain string, port int) tea.Cmd {
 	return func() tea.Msg {
 		url := fmt.Sprintf("https://%s", domain)
 		if port != 443 {
 			url = fmt.Sprintf("%s:%d", url, port)
 		}
-		_ = exec.Command("open", url).Run()
+		if err := exec.Command("open", url).Run(); err != nil {
+			return errMsg(fmt.Errorf("open browser: %w", err))
+		}
 		return nil
 	}
-}
-
-// errMsg lets us deliver an error through the tea.Cmd pipeline. Update could
-// be extended to surface it as a footer toast in a future iteration.
-type errMsg error
-
-// activeKeyMap returns the help.KeyMap to advertise in the footer: the top
-// modal's when the stack is non-empty, otherwise the root key map.
-func (m rootModel) activeKeyMap() help.KeyMap {
-	if len(m.modals) == 0 {
-		return m.keys
-	}
-	switch t := m.modals[len(m.modals)-1].(type) {
-	case modals.Add:
-		return t.Keys()
-	case modals.Edit:
-		return t.Keys()
-	case modals.Confirm:
-		return t.Keys()
-	}
-	return m.keys
 }
 
 func (m rootModel) View() string {
@@ -486,7 +348,17 @@ func (m rootModel) View() string {
 	m.help.ShowAll = m.showHelp
 	footer := m.help.View(m.activeKeyMap())
 
-	view := lipgloss.JoinVertical(lipgloss.Left, header, tabBar, rule, body, rule, footer)
+	var toast string
+	if m.lastErr != nil && time.Since(m.lastErrAt) < 5*time.Second {
+		toast = m.th.PillDown.Render("✗ " + m.lastErr.Error())
+	}
+
+	sections := []string{header, tabBar, rule, body, rule}
+	if toast != "" {
+		sections = append(sections, toast)
+	}
+	sections = append(sections, footer)
+	view := lipgloss.JoinVertical(lipgloss.Left, sections...)
 
 	if len(m.modals) == 0 {
 		return view

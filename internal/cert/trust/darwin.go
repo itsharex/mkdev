@@ -8,9 +8,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/venkatkrishna07/mkdev/internal/safeexec"
 )
 
 const systemKeychain = "/Library/Keychains/System.keychain"
@@ -20,6 +23,11 @@ const systemKeychain = "/Library/Keychains/System.keychain"
 // will prompt for a password on the controlling TTY. Callers driving a TUI
 // must release the terminal (or pre-authenticate sudo) before invoking.
 func Install(certPath string) error {
+	if bin, err := os.Executable(); err != nil {
+		return fmt.Errorf("trust: resolve self: %w", err)
+	} else if err := safeexec.VerifyBinPath(bin); err != nil {
+		return fmt.Errorf("trust: %w", err)
+	}
 	abs, err := filepath.Abs(certPath)
 	if err != nil {
 		return fmt.Errorf("trust: abs path: %w", err)
@@ -40,6 +48,11 @@ func Install(certPath string) error {
 // Uninstall removes the CA certificate at certPath from the system keychain.
 // Shells out to `sudo security remove-trusted-cert`; same TTY caveat as Install.
 func Uninstall(certPath string) error {
+	if bin, err := os.Executable(); err != nil {
+		return fmt.Errorf("trust: resolve self: %w", err)
+	} else if err := safeexec.VerifyBinPath(bin); err != nil {
+		return fmt.Errorf("trust: %w", err)
+	}
 	abs, err := filepath.Abs(certPath)
 	if err != nil {
 		return fmt.Errorf("trust: abs path: %w", err)
@@ -56,10 +69,14 @@ func Uninstall(certPath string) error {
 // keychain whose CommonName matches "mkdev local CA".
 func ListMkdevCerts() ([]string, error) {
 	cmd := exec.Command("security", "find-certificate", "-c", "mkdev local CA", "-Z", "-a", systemKeychain)
-	out, err := cmd.Output()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) && ee.ExitCode() == 1 {
+			if !strings.Contains(string(out), "could not be found") &&
+				!strings.Contains(string(out), "matched no certificate") {
+				return nil, fmt.Errorf("trust: list certs: %w: %s", err, strings.TrimSpace(string(out)))
+			}
 			return nil, nil
 		}
 		return nil, fmt.Errorf("trust: list certs: %w", err)
@@ -84,8 +101,16 @@ func IsInstalled(c *x509.Certificate) (bool, error) {
 	sum := sha1.Sum(c.Raw) //nolint:gosec
 	fp := strings.ToUpper(hex.EncodeToString(sum[:]))
 	cmd := exec.Command("security", "find-certificate", "-Z", "-a", systemKeychain)
-	out, err := cmd.Output()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && ee.ExitCode() == 1 {
+			if !strings.Contains(string(out), "could not be found") &&
+				!strings.Contains(string(out), "matched no certificate") {
+				return false, fmt.Errorf("trust: find-certificate: %w: %s", err, strings.TrimSpace(string(out)))
+			}
+			return false, nil
+		}
 		return false, fmt.Errorf("trust: find-certificate: %w", err)
 	}
 	return strings.Contains(string(out), fp), nil

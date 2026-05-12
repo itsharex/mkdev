@@ -17,6 +17,7 @@ type Route struct {
 	Target  string    `json:"target"` // host:port
 	TLD     string    `json:"tld"`
 	Enabled bool      `json:"enabled"`
+	Shared  bool      `json:"shared"` // advertised on LAN via mDNS when true
 	Source  string    `json:"source"` // "ad-hoc" or absolute project path
 	AddedAt time.Time `json:"added_at"`
 }

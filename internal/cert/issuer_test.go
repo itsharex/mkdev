@@ -37,6 +37,34 @@ func TestIssueIsCached(t *testing.T) {
 	require.Same(t, a, b, "issuer should return the same cached *tls.Certificate")
 }
 
+func TestPruneEvictsUnknownHosts(t *testing.T) {
+	ca, err := cert.CreateCA(t.TempDir(), "mkdev local CA")
+	require.NoError(t, err)
+	is := cert.NewIssuer(ca, nil)
+
+	_, err = is.Issue("alive.local")
+	require.NoError(t, err)
+	_, err = is.Issue("doomed.local")
+	require.NoError(t, err)
+
+	known := func(host string) bool { return host == "alive.local" }
+	is.Prune(known)
+
+	a, err := is.Issue("alive.local")
+	require.NoError(t, err)
+	b, err := is.Issue("alive.local")
+	require.NoError(t, err)
+	require.Same(t, a, b)
+
+	// Re-issuing doomed.local must mint fresh (different pointer).
+	d1, err := is.Issue("doomed.local")
+	require.NoError(t, err)
+	is.Prune(known)
+	d2, err := is.Issue("doomed.local")
+	require.NoError(t, err)
+	require.NotSame(t, d1, d2, "Prune should have evicted doomed.local so the second Issue mints fresh")
+}
+
 func TestGetCertificateBySNI(t *testing.T) {
 	ca, err := cert.CreateCA(t.TempDir(), "mkdev local CA")
 	require.NoError(t, err)

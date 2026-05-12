@@ -54,6 +54,21 @@ func (i *Issuer) Issue(host string) (*tls.Certificate, error) {
 	return leaf, nil
 }
 
+// Prune evicts cached leaf certs for hosts where known returns false. Call
+// after a router refresh to bound cache growth across the daemon's lifetime.
+func (i *Issuer) Prune(known func(string) bool) {
+	if known == nil {
+		return
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	for host := range i.cache {
+		if !known(host) {
+			delete(i.cache, host)
+		}
+	}
+}
+
 // GetCertificate is suitable as tls.Config.GetCertificate.
 func (i *Issuer) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	if hello.ServerName == "" {
@@ -78,7 +93,7 @@ func (i *Issuer) mint(host string) (*tls.Certificate, error) {
 		SerialNumber: serial,
 		Subject:      pkix.Name{CommonName: host},
 		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(825 * 24 * time.Hour),
+		NotAfter:     time.Now().Add(180 * 24 * time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		DNSNames:     []string{host},

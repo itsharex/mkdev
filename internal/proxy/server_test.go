@@ -65,6 +65,21 @@ func TestProxyEndToEnd(t *testing.T) {
 	require.Equal(t, "yes", resp.Header.Get("X-Backend"))
 }
 
+func TestIsLoopbackAddr(t *testing.T) {
+	cases := map[string]bool{
+		"127.0.0.1:1234":    true,
+		"[::1]:443":         true,
+		"192.168.1.10:8443": false,
+		"10.0.0.1:443":      false,
+		"":                  false,
+		"garbage":           false,
+	}
+	for in, want := range cases {
+		got := proxy.IsLoopbackAddr(in)
+		require.Equalf(t, want, got, "input %q", in)
+	}
+}
+
 func TestProxyUnknownHost404(t *testing.T) {
 	ca, err := cert.CreateCA(t.TempDir(), "test")
 	require.NoError(t, err)

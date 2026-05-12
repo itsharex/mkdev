@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
-	"syscall"
+
+	"github.com/venkatkrishna07/mkdev/internal/safeexec"
 )
 
 // HostsPath is the canonical path on macOS.
@@ -99,29 +99,8 @@ func (e *Editor) runGUI(op, host string) error {
 	return nil
 }
 
-// verifyBinPath rejects bin paths that aren't safe to invoke under sudo.
-// On macOS we require the binary to be a regular file owned by root or the
-// current uid, with no group/world write bit set.
+// verifyBinPath delegates to safeexec.VerifyBinPath so the same policy is
+// shared across every elevated invocation (hosts editor + cert trust).
 func verifyBinPath(bin string) error {
-	resolved, err := filepath.EvalSymlinks(bin)
-	if err != nil {
-		return fmt.Errorf("hosts: resolve %s: %w", bin, err)
-	}
-	info, err := os.Stat(resolved)
-	if err != nil {
-		return fmt.Errorf("hosts: stat %s: %w", resolved, err)
-	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("hosts: %s is not a regular file", resolved)
-	}
-	if info.Mode().Perm()&0o022 != 0 {
-		return fmt.Errorf("hosts: %s is group/world writable; refusing to invoke under sudo", resolved)
-	}
-	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-		uid := stat.Uid
-		if uid != 0 && int(uid) != os.Getuid() {
-			return fmt.Errorf("hosts: %s owned by uid %d (not root or current user); refusing to invoke under sudo", resolved, uid)
-		}
-	}
-	return nil
+	return safeexec.VerifyBinPath(bin)
 }

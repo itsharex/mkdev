@@ -11,6 +11,8 @@ import (
 	"github.com/venkatkrishna07/mkdev/internal/cert"
 	"github.com/venkatkrishna07/mkdev/internal/cert/trust"
 	"github.com/venkatkrishna07/mkdev/internal/config"
+	"github.com/venkatkrishna07/mkdev/internal/mdns"
+	"github.com/venkatkrishna07/mkdev/internal/store"
 	"github.com/venkatkrishna07/mkdev/internal/tui/styles"
 )
 
@@ -77,6 +79,8 @@ func (d *Doctor) runChecks() {
 	}
 	d.results = append(d.results, d.checkProxyPort())
 	d.results = append(d.results, d.checkHosts())
+	d.results = append(d.results, d.checkLANIP())
+	d.results = append(d.results, d.checkSharedRoutes())
 }
 
 func (d Doctor) checkStateDir() CheckResult {
@@ -132,7 +136,7 @@ func (d Doctor) checkProxyPort() CheckResult {
 	if err != nil {
 		return CheckResult{"proxy port", CheckWarn, "in use: " + err.Error()}
 	}
-	_ = ln.Close()
+	_ = ln.Close() // probe-only listener; close error is irrelevant
 	return CheckResult{"proxy port", CheckOK, addr + " available"}
 }
 
@@ -141,6 +145,41 @@ func (d Doctor) checkHosts() CheckResult {
 		return CheckResult{"/etc/hosts", CheckFail, err.Error()}
 	}
 	return CheckResult{"/etc/hosts", CheckOK, "readable"}
+}
+
+func (d Doctor) checkLANIP() CheckResult {
+	ip, err := mdns.PrimaryLANIPv4()
+	if err != nil {
+		return CheckResult{"LAN IP", CheckFail, err.Error()}
+	}
+	return CheckResult{"LAN IP", CheckOK, "advertising routes to " + ip.String()}
+}
+
+func (d Doctor) checkSharedRoutes() CheckResult {
+	s, err := store.Open(filepath.Join(d.home, "state.db"))
+	if err != nil {
+		return CheckResult{"shared routes", CheckWarn, err.Error()}
+	}
+	defer s.Close()
+	routes, err := s.ListRoutes()
+	if err != nil {
+		return CheckResult{"shared routes", CheckWarn, err.Error()}
+	}
+	n := 0
+	for _, r := range routes {
+		if r.Enabled && r.Shared {
+			n++
+		}
+	}
+	if n == 0 {
+		return CheckResult{"shared routes", CheckOK, "0 — LAN access denied"}
+	}
+	ip, ipErr := mdns.PrimaryLANIPv4()
+	detail := fmt.Sprintf("%d enabled", n)
+	if ipErr == nil {
+		detail += " — advertising on " + ip.String()
+	}
+	return CheckResult{"shared routes", CheckOK, detail}
 }
 
 // View renders the check list with ✓/!/✗ glyphs and a re-run hint.

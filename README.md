@@ -88,15 +88,15 @@ Override the config directory with `--home <path>` or `MKDEV_HOME=...`.
 - Generates an **ECDSA P-256** root CA at `~/.mkdev/ca/`. The private key is mode `0o400`.
 - Installs the CA in the macOS **System Keychain** via `security add-trusted-cert -d -r trustRoot -p ssl -p basic`.
 - On `add`, writes a route to a **bbolt** KV at `~/.mkdev/state.db` and appends a `127.0.0.1 <name>.<tld>` line to `/etc/hosts` via a `sudo`-invoked helper subcommand.
-- `serve` listens TLS on `127.0.0.1:<proxy_port>`, **mints leaf certs per SNI** on demand using the root CA, and reverse-proxies to the configured upstream.
+- `serve` listens TLS on `0.0.0.0:<proxy_port>`, **mints leaf certs per SNI** on demand using the root CA, and reverse-proxies to the configured upstream.
 - The route table is re-read every 2 seconds, so `add` / `remove` take effect without restarting `serve`.
-- The proxy binds `127.0.0.1` only. It does **not** listen on `0.0.0.0`.
+- The proxy binds `0.0.0.0`, but non-loopback requests are 403'd unless the matching route is marked **shared** — see [Share over LAN](#share-over-lan-experimental).
 
 ## Security
 
 This tool installs a **private CA into your system trust store**. Anyone with read access to `~/.mkdev/ca/rootCA-key.pem` can mint TLS certs that your machine will trust. The key is created `0o400` (owner read only).
 
-- The proxy binds `127.0.0.1`, never `0.0.0.0`.
+- The proxy binds `0.0.0.0`, but a connection-source ACL 403s LAN requests to any route not explicitly marked **shared**. Loopback always passes.
 - No telemetry. No remote calls. No update checks.
 - `add` / `remove` invoke `sudo` to mutate `/etc/hosts`. See [SECURITY.md](./SECURITY.md) for the threat model and a known limit around `os.Executable()`-resolved helper paths.
 
@@ -129,6 +129,28 @@ Planned, in order:
 - **Plan 6** — signed releases via goreleaser, CI matrix, Homebrew tap.
 
 Nothing on the roadmap is implemented yet. If a feature isn't in the table above, it doesn't exist.
+
+## Share over LAN (experimental)
+
+Mark individual routes as shared:
+
+1. In the TUI Domains tab, select a route and press `s` to flip the **SHARE** column to `LAN`.
+2. The shared route is advertised via mDNS as `<name>.local` → this machine's LAN IP. Other devices on the same Wi-Fi can resolve it.
+
+Devices on the LAN must trust the mkdev CA to connect without warnings. Copy `~/.mkdev/ca/rootCA.pem` to each device:
+
+- **macOS**: open in Keychain → System → Always Trust.
+- **iOS**: AirDrop → Settings → Profile Downloaded → install → General → About → Certificate Trust Settings → enable.
+- **Windows**: `certutil -addstore -f Root rootCA.pem` (admin).
+- **Android**: Settings → Security → Install a certificate → CA certificate.
+
+### Caveats
+
+- Only `.local` routes are advertised. Other TLDs are still served by the proxy but unreachable by name from the LAN.
+- Multicast is often blocked on corporate / cloud networks. Home/office Wi-Fi works.
+- Toggling `s` is live — both mDNS advertising and LAN-side access change immediately on the next request. No restart needed.
+- The proxy always binds `0.0.0.0` so LAN clients can connect when a route is shared. Non-shared routes are 403'd for non-loopback requests as defense-in-depth.
+- Anyone on the LAN can hit your dev servers when a route is shared. Don't enable on untrusted Wi-Fi.
 
 ## Contributing
 

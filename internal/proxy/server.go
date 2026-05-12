@@ -50,7 +50,26 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("mkdev: no route for %s", host), http.StatusNotFound)
 		return
 	}
+	if !IsLoopbackAddr(r.RemoteAddr) && !s.router.Shared(host) {
+		slog.Info("proxy: LAN denied (route not shared)", "host", host, "remote", r.RemoteAddr)
+		http.Error(w, fmt.Sprintf("mkdev: route %s is not shared on LAN", host), http.StatusForbidden)
+		return
+	}
 	target, _ := s.router.Lookup(host)
 	r.Host = target
 	rp.ServeHTTP(w, r)
+}
+
+// IsLoopbackAddr reports whether remoteAddr resolves to a loopback IP
+// (127.0.0.0/8 or ::1). Used to gate LAN-side access to unshared routes.
+func IsLoopbackAddr(remoteAddr string) bool {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		host = remoteAddr
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback()
 }

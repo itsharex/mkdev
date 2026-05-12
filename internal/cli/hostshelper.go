@@ -59,24 +59,36 @@ func helperRemove(host string) error {
 	return atomicWriteHosts(next)
 }
 
-// atomicWriteHosts writes data to hosts.HostsPath via a sibling temp file +
-// rename so a mid-write crash never leaves /etc/hosts truncated or empty.
-// Mode bits of the existing file are preserved across the rename.
+// atomicWriteHosts writes data to hosts.HostsPath via a unique temp file +
+// rename so a mid-write crash never leaves /etc/hosts truncated or empty,
+// and a hostile process can't pre-create the temp path as a symlink. The
+// mode bits of the existing file are preserved across the rename.
 func atomicWriteHosts(data string) error {
 	info, err := os.Stat(hosts.HostsPath)
 	if err != nil {
 		return err
 	}
-	tmp := hosts.HostsPath + ".mkdev.tmp"
-	if err := os.WriteFile(tmp, []byte(data), info.Mode().Perm()); err != nil {
+	f, err := os.CreateTemp("/etc", "hosts.mkdev.*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	cleanup := func() { _ = os.Remove(tmp) }
+	if _, err := f.Write([]byte(data)); err != nil {
+		_ = f.Close()
+		cleanup()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		cleanup()
 		return err
 	}
 	if err := os.Chmod(tmp, info.Mode().Perm()); err != nil {
-		_ = os.Remove(tmp)
+		cleanup()
 		return err
 	}
 	if err := os.Rename(tmp, hosts.HostsPath); err != nil {
-		_ = os.Remove(tmp)
+		cleanup()
 		return err
 	}
 	return nil

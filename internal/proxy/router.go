@@ -14,6 +14,7 @@ import (
 
 type entry struct {
 	target string
+	shared bool
 	proxy  *httputil.ReverseProxy
 }
 
@@ -47,7 +48,7 @@ func (r *Router) Set(routes []store.Route) {
 			slog.Warn("proxy: upstream error", "host", domain, "target", target, "err", err)
 			http.Error(rw, fmt.Sprintf("mkdev: upstream %s unreachable: %v", target, err), http.StatusBadGateway)
 		}
-		next[domain] = entry{target: target, proxy: rp}
+		next[domain] = entry{target: target, shared: rt.Shared, proxy: rp}
 	}
 	r.table.Store(&next)
 }
@@ -76,4 +77,15 @@ func (r *Router) LookupProxy(domain string) (*httputil.ReverseProxy, bool) {
 func (r *Router) Has(domain string) bool {
 	_, ok := r.Lookup(domain)
 	return ok
+}
+
+// Shared returns true if domain is registered AND marked shared. Returns
+// false for unknown domains and for known-but-not-shared domains.
+func (r *Router) Shared(domain string) bool {
+	t := *r.table.Load()
+	v, ok := t[strings.ToLower(domain)]
+	if !ok {
+		return false
+	}
+	return v.shared
 }

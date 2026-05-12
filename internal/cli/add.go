@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,7 +72,10 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		AddedAt: time.Now().UTC(),
 	}
 	if err := s.PutRoute(r); err != nil {
-		_ = editor.Remove(domain)
+		if remErr := editor.Remove(domain); remErr != nil {
+			slog.Error("inconsistent state", "domain", domain, "primary", err, "rollback", remErr)
+			return errors.Join(err, fmt.Errorf("rollback: %w", remErr))
+		}
 		return err
 	}
 	Success(cmd.OutOrStdout(), fmt.Sprintf("added: https://%s → %s", domain, target))

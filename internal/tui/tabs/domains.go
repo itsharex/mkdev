@@ -23,10 +23,11 @@ type Domains struct {
 // NewDomains constructs a Domains tab sized for the given viewport.
 func NewDomains(th styles.Theme, width, height int) Domains {
 	cols := []table.Column{
-		{Title: "DOMAIN", Width: 28},
-		{Title: "TARGET", Width: 26},
+		{Title: "DOMAIN", Width: 26},
+		{Title: "TARGET", Width: 24},
 		{Title: "STATUS", Width: 10},
-		{Title: "SOURCE", Width: 20},
+		{Title: "SHARE", Width: 6},
+		{Title: "SOURCE", Width: 18},
 	}
 	t := table.New(
 		table.WithColumns(cols),
@@ -94,7 +95,11 @@ func (d *Domains) refreshRows() {
 		if !r.Enabled {
 			status = "⊘ off"
 		}
-		rows[i] = table.Row{r.Domain, r.Target, status, r.Source}
+		share := ""
+		if r.Shared {
+			share = "LAN"
+		}
+		rows[i] = table.Row{r.Domain, r.Target, status, share, r.Source}
 	}
 	d.table.SetRows(rows)
 	d.fitHeight()
@@ -137,9 +142,17 @@ func (d Domains) detail() string {
 	parts := []string{
 		d.th.Title.Render(r.Domain) + d.th.Dim.Render(" → ") + r.Target,
 		d.th.Dim.Render("status ") + status,
+		d.th.Dim.Render("share ") + boolWord(r.Shared, "LAN", "local-only"),
 		d.th.Dim.Render("added ") + added,
 		d.th.Dim.Render("source ") + r.Source,
 		d.th.Dim.Render("issuer ") + "mkdev CA",
 	}
 	return strings.Join(parts, d.th.Dim.Render(" · "))
+}
+
+func boolWord(b bool, yes, no string) string {
+	if b {
+		return yes
+	}
+	return no
 }

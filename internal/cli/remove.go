@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,7 +60,10 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("hosts: %w", err)
 	}
 	if err := s.DeleteRoute(domain); err != nil {
-		_ = editor.Add(domain)
+		if addErr := editor.Add(domain); addErr != nil {
+			slog.Error("inconsistent state", "domain", domain, "primary", err, "rollback", addErr)
+			return errors.Join(err, fmt.Errorf("rollback: %w", addErr))
+		}
 		return err
 	}
 	Success(cmd.OutOrStdout(), "removed: "+domain)
