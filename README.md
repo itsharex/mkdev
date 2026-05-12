@@ -49,15 +49,27 @@ Requires **Go 1.25+** and macOS.
 
 ## Commands
 
-| Command            | Purpose                                                       |
-|--------------------|---------------------------------------------------------------|
-| `install`          | Generate the root CA, write defaults, trust in Keychain.      |
-| `add <name> <h:p>` | Add route. Appends a `127.0.0.1` entry to `/etc/hosts`.       |
-| `remove <name>`    | Remove route and its `/etc/hosts` entry.                      |
-| `list`             | List routes in the store.                                     |
-| `serve`            | Run the TLS reverse proxy in the foreground.                  |
-| `uninstall`        | Untrust the CA. `--purge` also wipes `~/.mkdev/`.           |
-| `hosts-helper`     | Hidden. Invoked via `sudo` to mutate `/etc/hosts` atomically. |
+| Command                  | Purpose                                                       |
+|--------------------------|---------------------------------------------------------------|
+| `install`                | Generate the root CA, write defaults, trust in Keychain.      |
+| `add <name> <target>`    | Add route. Appends a `127.0.0.1` entry to `/etc/hosts`.       |
+| `remove <name>`          | Remove route and its `/etc/hosts` entry.                      |
+| `list`                   | List routes in the store.                                     |
+| `serve`                  | Run the TLS reverse proxy in the foreground.                  |
+| `uninstall`              | Untrust the CA. `--purge` also wipes `~/.mkdev/`.             |
+| `hosts-helper`           | Hidden. Invoked via `sudo` to mutate `/etc/hosts` atomically. |
+
+### Target formats
+
+`<target>` accepts any of:
+
+```
+host:port                  e.g. localhost:3000
+http://host[:port]/path    e.g. http://localhost:3000/api
+https://host[:port]/path   e.g. https://gitlab.example.com
+```
+
+For HTTPS upstreams (e.g., a private GitLab on a corporate VPN) the upstream's TLS cert must verify against the system trust store. Private CAs need their root added to the OS keychain.
 
 `hosts-helper` is not meant to be called directly. `add` / `remove` re-invoke the same binary under `sudo` to perform the privileged `/etc/hosts` write.
 

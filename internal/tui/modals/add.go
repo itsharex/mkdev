@@ -12,9 +12,10 @@ import (
 
 // AddPayload is delivered in the Result on submit.
 type AddPayload struct {
-	Domain string
-	Target string
-	TLD    string
+	Domain   string
+	Target   string
+	TLD      string
+	Insecure bool
 }
 
 // AddKeys are the keybindings advertised by the Add modal.
@@ -44,8 +45,11 @@ type Add struct {
 	th       styles.Theme
 	defaultT string
 	fields   [2]textinput.Model
-	focus    int
+	focus    int // 0=name, 1=target, 2=insecure toggle
+	insecure bool
 }
+
+const addNumFocus = 3 // name + target + insecure toggle
 
 // NewAdd constructs an empty Add modal.
 func NewAdd(th styles.Theme, defaultTLD string) Add {
@@ -78,25 +82,41 @@ func (a Add) Update(msg tea.Msg) (Add, tea.Cmd) {
 				return a, nil
 			}
 			domain := strings.ToLower(name)
-			if !strings.Contains(domain, ".") {
+			if !strings.HasSuffix(domain, a.defaultT) {
 				domain += a.defaultT
 			}
-			payload := AddPayload{Domain: domain, Target: strings.TrimSpace(a.fields[1].Value()), TLD: a.defaultT}
+			payload := AddPayload{
+				Domain:   domain,
+				Target:   strings.TrimSpace(a.fields[1].Value()),
+				TLD:      a.defaultT,
+				Insecure: a.insecure,
+			}
 			return a, func() tea.Msg { return Closed{Result: Result{Payload: payload}} }
 		case tea.KeyTab, tea.KeyShiftTab:
-			a.fields[a.focus].Blur()
-			if k.Type == tea.KeyTab {
-				a.focus = (a.focus + 1) % len(a.fields)
-			} else {
-				a.focus = (a.focus - 1 + len(a.fields)) % len(a.fields)
+			if a.focus < len(a.fields) {
+				a.fields[a.focus].Blur()
 			}
-			a.fields[a.focus].Focus()
+			if k.Type == tea.KeyTab {
+				a.focus = (a.focus + 1) % addNumFocus
+			} else {
+				a.focus = (a.focus - 1 + addNumFocus) % addNumFocus
+			}
+			if a.focus < len(a.fields) {
+				a.fields[a.focus].Focus()
+			}
 			return a, textinput.Blink
 		}
+		if k.String() == " " && a.focus == 2 {
+			a.insecure = !a.insecure
+			return a, nil
+		}
 	}
-	var cmd tea.Cmd
-	a.fields[a.focus], cmd = a.fields[a.focus].Update(msg)
-	return a, cmd
+	if a.focus < len(a.fields) {
+		var cmd tea.Cmd
+		a.fields[a.focus], cmd = a.fields[a.focus].Update(msg)
+		return a, cmd
+	}
+	return a, nil
 }
 
 // View renders the Add modal.
@@ -104,14 +124,38 @@ func (a Add) View() string {
 	var b strings.Builder
 	b.WriteString(a.th.ModalTitle.Render("Add Domain"))
 	b.WriteString("\n\n")
-	b.WriteString(a.th.Dim.Render("Name"))
+
+	nameLabel := "Name"
+	if a.focus == 0 {
+		nameLabel = "▶ Name"
+	}
+	b.WriteString(a.th.Dim.Render(nameLabel))
 	b.WriteString("\n")
 	b.WriteString(a.fields[0].View())
 	b.WriteString("\n\n")
-	b.WriteString(a.th.Dim.Render("Target (host:port)"))
+
+	targetLabel := "Target"
+	if a.focus == 1 {
+		targetLabel = "▶ Target"
+	}
+	b.WriteString(a.th.Dim.Render(targetLabel))
 	b.WriteString("\n")
 	b.WriteString(a.fields[1].View())
 	b.WriteString("\n\n")
-	b.WriteString(a.th.Dim.Render("tab:next  enter:submit  esc:cancel"))
-	return a.th.Modal.Width(50).Render(b.String())
+
+	mark := a.th.PillDown.Render("[ ] verify upstream TLS")
+	if a.insecure {
+		mark = a.th.PillUp.Render("[✓] skip TLS verify (private CA)")
+	}
+	insecureLabel := "  insecure:"
+	if a.focus == 2 {
+		insecureLabel = a.th.Title.Render("▶ insecure:")
+	} else {
+		insecureLabel = a.th.Dim.Render(insecureLabel)
+	}
+	b.WriteString(insecureLabel + " " + mark)
+	b.WriteString("\n\n")
+
+	b.WriteString(a.th.Dim.Render("tab next · space toggle · enter submit · esc cancel"))
+	return a.th.Modal.Width(60).Render(b.String())
 }

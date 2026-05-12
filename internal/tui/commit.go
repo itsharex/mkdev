@@ -31,7 +31,7 @@ func (m rootModel) commitAdd(p modals.AddPayload) tea.Cmd {
 		if err := editor.Add(p.Domain); err != nil {
 			return errMsg(fmt.Errorf("hosts: %w", err))
 		}
-		r := store.Route{Domain: p.Domain, Target: p.Target, TLD: p.TLD, Enabled: true, Source: store.SourceAdHoc, AddedAt: time.Now().UTC()}
+		r := store.Route{Domain: p.Domain, Target: p.Target, TLD: p.TLD, Enabled: true, Insecure: p.Insecure, Source: store.SourceAdHoc, AddedAt: time.Now().UTC()}
 		if err := s.PutRoute(r); err != nil {
 			if remErr := editor.Remove(p.Domain); remErr != nil {
 				slog.Error("inconsistent state", "domain", p.Domain, "primary", err, "rollback", remErr)

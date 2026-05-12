@@ -13,13 +13,14 @@ const SourceAdHoc = "ad-hoc"
 
 // Route describes a domain to upstream mapping.
 type Route struct {
-	Domain  string    `json:"domain"`
-	Target  string    `json:"target"` // host:port
-	TLD     string    `json:"tld"`
-	Enabled bool      `json:"enabled"`
-	Shared  bool      `json:"shared"` // advertised on LAN via mDNS when true
-	Source  string    `json:"source"` // "ad-hoc" or absolute project path
-	AddedAt time.Time `json:"added_at"`
+	Domain   string    `json:"domain"`
+	Target   string    `json:"target"` // host:port or full URL
+	TLD      string    `json:"tld"`
+	Enabled  bool      `json:"enabled"`
+	Shared   bool      `json:"shared"`   // advertised on LAN via mDNS when true
+	Insecure bool      `json:"insecure"` // skip upstream TLS verification when true
+	Source   string    `json:"source"`   // "ad-hoc" or absolute project path
+	AddedAt  time.Time `json:"added_at"`
 }
 
 // PutRoute inserts or replaces a route keyed by Domain.

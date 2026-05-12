@@ -15,13 +15,16 @@ import (
 	"github.com/venkatkrishna07/mkdev/internal/store"
 )
 
+var addInsecure bool
+
 func newAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "add <name> <host:port>",
+		Use:   "add <name> <target>",
 		Short: "Map https://<name>.<tld> to a local upstream",
 		Args:  cobra.ExactArgs(2),
 		RunE:  runAdd,
 	}
+	cmd.Flags().BoolVar(&addInsecure, "insecure", false, "skip upstream TLS verification (private CAs)")
 	return cmd
 }
 
@@ -36,7 +39,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	}
 	name, target := args[0], args[1]
 	domain := strings.ToLower(name)
-	if !strings.Contains(domain, ".") {
+	if !strings.HasSuffix(domain, cfg.TLD) {
 		domain += cfg.TLD
 	}
 	if !hosts.ValidHostname(domain) {
@@ -64,12 +67,13 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("hosts: %w", err)
 	}
 	r := store.Route{
-		Domain:  domain,
-		Target:  target,
-		TLD:     cfg.TLD,
-		Enabled: true,
-		Source:  store.SourceAdHoc,
-		AddedAt: time.Now().UTC(),
+		Domain:   domain,
+		Target:   target,
+		TLD:      cfg.TLD,
+		Enabled:  true,
+		Insecure: addInsecure,
+		Source:   store.SourceAdHoc,
+		AddedAt:  time.Now().UTC(),
 	}
 	if err := s.PutRoute(r); err != nil {
 		if remErr := editor.Remove(domain); remErr != nil {

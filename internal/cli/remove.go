@@ -34,7 +34,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	domain := strings.ToLower(args[0])
-	if !strings.Contains(domain, ".") {
+	if !strings.HasSuffix(domain, cfg.TLD) {
 		domain += cfg.TLD
 	}
 	if !hosts.ValidHostname(domain) {

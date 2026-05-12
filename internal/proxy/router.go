@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -41,16 +42,44 @@ func (r *Router) Set(routes []store.Route) {
 			continue
 		}
 		domain := strings.ToLower(rt.Domain)
-		target := rt.Target
-		upstream := &url.URL{Scheme: "http", Host: target}
-		rp := httputil.NewSingleHostReverseProxy(upstream)
-		rp.ErrorHandler = func(rw http.ResponseWriter, _ *http.Request, err error) {
-			slog.Warn("proxy: upstream error", "host", domain, "target", target, "err", err)
-			http.Error(rw, fmt.Sprintf("mkdev: upstream %s unreachable: %v", target, err), http.StatusBadGateway)
+		upstream, err := normalizeUpstream(rt.Target)
+		if err != nil {
+			slog.Warn("proxy: skipping invalid target", "domain", domain, "target", rt.Target, "err", err)
+			continue
 		}
-		next[domain] = entry{target: target, shared: rt.Shared, proxy: rp}
+		raw := rt.Target
+		rp := httputil.NewSingleHostReverseProxy(upstream)
+		if rt.Insecure {
+			tr := http.DefaultTransport.(*http.Transport).Clone()
+			tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // explicit per-route opt-in for private-CA upstreams
+			rp.Transport = tr
+		}
+		rp.ErrorHandler = func(rw http.ResponseWriter, _ *http.Request, err error) {
+			slog.Warn("proxy: upstream error", "host", domain, "target", raw, "err", err)
+			http.Error(rw, fmt.Sprintf("mkdev: upstream %s unreachable: %v", raw, err), http.StatusBadGateway)
+		}
+		next[domain] = entry{target: upstream.Host, shared: rt.Shared, proxy: rp}
 	}
 	r.table.Store(&next)
+}
+
+// normalizeUpstream parses target into a URL suitable for
+// httputil.NewSingleHostReverseProxy. A bare host[:port] gets a default http
+// scheme; explicit http:// or https:// is preserved along with any base path.
+// Returns an error if the result has no host.
+func normalizeUpstream(target string) (*url.URL, error) {
+	s := strings.TrimSpace(target)
+	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
+		s = "http://" + s
+	}
+	u, err := url.Parse(s)
+	if err != nil {
+		return nil, fmt.Errorf("invalid url %q: %w", target, err)
+	}
+	if u.Host == "" {
+		return nil, fmt.Errorf("no host in target %q", target)
+	}
+	return u, nil
 }
 
 // Lookup returns the upstream target for domain or "" / false if unknown/disabled.
