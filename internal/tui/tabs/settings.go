@@ -71,7 +71,7 @@ func (s Settings) Update(msg tea.Msg) (Settings, tea.Cmd) {
 		case tea.KeyEnter:
 			return s.save()
 		}
-		if k.String() == "r" {
+		if k.String() == "ctrl+r" {
 			return NewSettings(s.th, s.home), textinput.Blink
 		}
 	}
@@ -115,6 +115,6 @@ func (s Settings) View() string {
 	if s.status != "" {
 		out.WriteString(s.th.Dim.Render(s.status) + "\n")
 	}
-	out.WriteString(s.th.Dim.Render("tab next · enter save · r reload"))
+	out.WriteString(s.th.Dim.Render("tab next field · enter save · ctrl+r reload · 1-5 switch tab"))
 	return out.String()
 }

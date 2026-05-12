@@ -207,6 +207,11 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m rootModel) handleGlobalKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Settings owns Tab/Shift+Tab for field navigation; tab-bar uses 1-5
+	// (or ctrl+]/ctrl+[) to switch tabs while inside Settings.
+	if m.active == tabSettings && (key.Matches(k, m.keys.NextTab) || key.Matches(k, m.keys.PrevTab)) {
+		return m.forwardToActiveTab(k)
+	}
 	switch {
 	case key.Matches(k, m.keys.Quit):
 		m.modals = append(m.modals, modals.NewConfirm(m.th, "Quit mkdev?", "stops the proxy and closes the TUI"))
