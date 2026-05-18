@@ -2,6 +2,8 @@ package mdns
 
 import (
 	"errors"
+	"io"
+	"log"
 	"net"
 	"strings"
 	"sync"
@@ -9,6 +11,13 @@ import (
 	"github.com/hashicorp/mdns"
 	"github.com/venkatkrishna07/mkdev/internal/store"
 )
+
+// quietLogger silences hashicorp/mdns's internal `log` output. Its default
+// emits noisy "Failed to handle query: support for DNS requests with high
+// truncate" lines whenever a peer on the LAN sends a non-standard query —
+// not actionable for the user. The slog default we set globally would
+// otherwise wrap those at INFO level and clog the TUI log.
+var quietLogger = log.New(io.Discard, "", 0)
 
 // Publisher manages a set of mDNS service registrations — one per enabled
 // route whose TLD is ".local". Other TLDs are silently skipped.
@@ -85,7 +94,7 @@ func registerOne(domain, target string, ip net.IP) (*mdns.Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	srv, err := mdns.NewServer(&mdns.Config{Zone: service})
+	srv, err := mdns.NewServer(&mdns.Config{Zone: service, Logger: quietLogger})
 	if err != nil {
 		return nil, err
 	}
