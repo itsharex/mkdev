@@ -41,14 +41,27 @@ func NewDomains(th styles.Theme, width, height int) Domains {
 
 func NewDomainsWithRTT(th styles.Theme, width, height int, rtt RTTSource) Domains {
 	d := Domains{th: th, width: width, height: height, rtt: rtt}
+	cols := d.layoutCols()
 	t := table.New(
-		table.WithColumns(d.layoutCols()),
+		table.WithColumns(cols),
 		table.WithFocused(true),
 		table.WithHeight(8),
+		table.WithWidth(tableTotalWidth(cols)),
 	)
 	t.SetStyles(tableStyles(th))
 	d.table = t
 	return d
+}
+
+// tableTotalWidth returns the visible width occupied by the table — the sum of
+// column content widths plus the Cell.Padding(0,1) added per column by
+// bubbles/table.
+func tableTotalWidth(cols []table.Column) int {
+	w := 0
+	for _, c := range cols {
+		w += c.Width + domainsCellPad
+	}
+	return w
 }
 
 func tableStyles(th styles.Theme) table.Styles {
@@ -102,7 +115,9 @@ func (d Domains) Update(in tea.Msg) (Domains, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		d.width = m.Width
 		d.height = m.Height
-		d.table.SetColumns(d.layoutCols())
+		cols := d.layoutCols()
+		d.table.SetColumns(cols)
+		d.table.SetWidth(tableTotalWidth(cols))
 		d.fitHeight()
 	}
 	var cmd tea.Cmd
