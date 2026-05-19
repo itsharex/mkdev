@@ -2,18 +2,9 @@
 
 **Local HTTPS for your dev servers.**
 
-> 🚧 **Pre-1.0.** Walking-skeleton release. API and on-disk layout may change.
-
-[![build](https://img.shields.io/badge/build-pending-lightgrey)]() [![tests](https://img.shields.io/badge/tests-pending-lightgrey)]() [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![ci](https://github.com/venkatkrishna07/mkdev/actions/workflows/ci.yml/badge.svg)](https://github.com/venkatkrishna07/mkdev/actions/workflows/ci.yml) [![release](https://github.com/venkatkrishna07/mkdev/actions/workflows/release.yml/badge.svg)](https://github.com/venkatkrishna07/mkdev/actions/workflows/release.yml) [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
 ---
-
-## Why mkdev
-
-- **Real certs in your system trust store.** No browser warnings, no `--insecure`, no per-project root.
-- **No per-app config.** One TOML, one bbolt file. Your app stays untouched.
-- **Single static Go binary.** No Node, no Docker, no nginx.conf to copy-paste.
-- **No background daemon yet.** Plan 2 will add that; today `serve` runs in the foreground.
 
 ## What it does
 
@@ -23,8 +14,6 @@ mkdev add myapp localhost:3000   # routes https://myapp.local → localhost:3000
 mkdev serve                      # foreground TLS proxy
 curl https://myapp.local           # 200 from your local app
 ```
-
-That's the whole pitch. Four lines, real HTTPS.
 
 ## Install
 
@@ -42,7 +31,13 @@ go install github.com/venkatkrishna07/mkdev/cmd/mkdev@latest
 
 ### Direct download
 
-Pre-built binaries for macOS (Intel + Apple Silicon), Linux (amd64 + arm64), and Windows (amd64) are published on the [Releases page](https://github.com/venkatkrishna07/mkdev/releases). Verify with the published `checksums.txt`.
+Pre-built binaries for macOS (Intel + Apple Silicon), Linux (amd64 + arm64), and Windows (amd64) are published on the [Releases page](https://github.com/venkatkrishna07/mkdev/releases). Each release includes `checksums.txt` plus a cosign keyless signature (`checksums.txt.sig` + `.pem`) — see [SECURITY.md#verifying-releases](./SECURITY.md) for the verify command.
+
+On macOS, if Gatekeeper blocks a direct-download binary:
+
+```sh
+xattr -d com.apple.quarantine ./mkdev
+```
 
 ### From source
 
@@ -76,15 +71,27 @@ Firefox uses its own NSS store and is **not yet covered** — system Chrome/Safa
 
 ## Commands
 
-| Command                  | Purpose                                                       |
-|--------------------------|---------------------------------------------------------------|
-| `install`                | Generate the root CA, write defaults, trust in system store.  |
-| `add <name> <target>`    | Add route. Appends a `127.0.0.1` entry to `/etc/hosts`.       |
-| `remove <name>`          | Remove route and its `/etc/hosts` entry.                      |
-| `list`                   | List routes in the store.                                     |
-| `serve`                  | Run the TLS reverse proxy in the foreground.                  |
-| `uninstall`              | Untrust the CA. `--purge` also wipes `~/.mkdev/`.             |
-| `hosts-helper`           | Hidden. Invoked via `sudo` to mutate `/etc/hosts` atomically. |
+| Command                              | Purpose                                                       |
+|--------------------------------------|---------------------------------------------------------------|
+| `install`                            | Generate the root CA, write defaults, trust in system store.  |
+| `add <name> <target>`                | Add route. Appends a `127.0.0.1` entry to `/etc/hosts`.       |
+| `remove <name>`                      | Remove route and its `/etc/hosts` entry.                      |
+| `list`                               | List routes in the store.                                     |
+| `serve`                              | Run the TLS reverse proxy in the foreground.                  |
+| `tui`                                | Launch the TUI (also the default when run with no args).      |
+| `uninstall`                          | Untrust the CA. `--purge` also wipes `~/.mkdev/`.             |
+| `version`                            | Print version, commit, build date.                            |
+| `completion <bash\|zsh\|fish\|powershell>` | Emit shell completion script.                                 |
+| `hosts-helper`                       | Hidden. Invoked via `sudo` to mutate `/etc/hosts` atomically. |
+
+### Flags and environment
+
+| Flag / env                    | Effect                                                       |
+|-------------------------------|--------------------------------------------------------------|
+| `--home <path>`               | Override `~/.mkdev` state directory.                         |
+| `--verbose`, `-v`             | Debug-level logging to stderr.                               |
+| `--version`                   | Print version and exit.                                      |
+| `MKDEV_HOME=<path>`           | Equivalent to `--home`.                                      |
 
 ### Target formats
 
@@ -101,6 +108,8 @@ For HTTPS upstreams (e.g., a private GitLab on a corporate VPN) the upstream's T
 `hosts-helper` is not meant to be called directly. `add` / `remove` re-invoke the same binary under `sudo` to perform the privileged `/etc/hosts` write.
 
 ## Configuration
+
+> **TLD note.** `.local` routes need an mDNS responder (always-on on macOS, available on Linux when `nss-mdns` is installed). `.test` / `.dev` / `.localhost` work everywhere via `/etc/hosts` alone. Set `tld` in config to match.
 
 Config lives at `~/.mkdev/config.toml`. Defaults:
 
@@ -148,26 +157,19 @@ mkdev uninstall --purge   # also delete ~/.mkdev/
 
 If something gets stuck, open **Keychain Access.app**, search for `mkdev`, and delete by hand. Then `grep mkdev /etc/hosts` and clean any leftovers.
 
-## Comparisons
 
-- **vs. [mkcert](https://github.com/FiloSottile/mkcert):** mkcert does one thing — issuing locally-trusted certs — and does it very well. mkdev also does that, plus `/etc/hosts` and the reverse proxy. If all you want is certs, use mkcert.
-- **vs. [Caddy](https://caddyserver.com):** Caddy is a production-grade reverse proxy. You write a `Caddyfile` per project. mkdev is opinionated: one binary, four commands, no config per project.
-- **vs. dnsmasq + nginx:** the classic stack. Powerful, configurable, and a half-day of YAML and `brew services`. mkdev trades flexibility for the 4-line quickstart.
-
-mkdev is the **"all three jobs (cert, hosts, proxy) in one binary"** play.
 
 ## Roadmap
 
-Internal design docs and phased plans live under [`docs/superpowers/specs/`](./docs/superpowers/specs/) and [`docs/superpowers/plans/`](./docs/superpowers/plans/). They are intentionally not gitignored — useful as context.
+- Background daemon with gRPC IPC; `serve` becomes `up`/`down`.
+- Firefox NSS store integration.
 
-Planned, in order:
+## Troubleshooting
 
-- **Plan 2** — background daemon with gRPC IPC; `serve` becomes `up`/`down`.
-- **Plan 3-4** — TUI (route table, live logs, cert inspection).
-- ~~**Plan 5** — Linux and Windows trust-store support.~~ ✅ Shipped.
-- **Plan 6** — signed releases via goreleaser, CI matrix, Homebrew tap.
-
-Nothing on the roadmap is implemented yet. If a feature isn't in the table above, it doesn't exist.
+- **Firefox shows a red bar.** Firefox uses its own NSS store; system trust doesn't reach it. NSS integration is on the roadmap. For now, import `~/.mkdev/ca/rootCA.pem` manually under Settings → Privacy & Security → Certificates → View Certificates → Authorities → Import.
+- **`serve` fails with "permission denied" on :443.** Either run as root, or set `proxy_port = 8443` in `~/.mkdev/config.toml` and use `https://name.local:8443`.
+- **`mkdev add` keeps asking for sudo.** Sudo's per-session cache expires (default 5 min). Use the TUI Domains tab instead — it elevates via `osascript` (macOS GUI prompt) or `pkexec` (Linux Polkit).
+- **`/etc/hosts` already has an entry for that name.** `mkdev add` is idempotent and only appends when no `mkdev`-managed entry exists. Remove the prior entry by hand or pick a different name.
 
 ## Share over LAN (experimental)
 
@@ -176,12 +178,7 @@ Mark individual routes as shared:
 1. In the TUI Domains tab, select a route and press `s` to flip the **SHARE** column to `LAN`.
 2. The shared route is advertised via mDNS as `<name>.local` → this machine's LAN IP. Other devices on the same Wi-Fi can resolve it.
 
-Devices on the LAN must trust the mkdev CA to connect without warnings. Copy `~/.mkdev/ca/rootCA.pem` to each device:
-
-- **macOS**: open in Keychain → System → Always Trust.
-- **iOS**: AirDrop → Settings → Profile Downloaded → install → General → About → Certificate Trust Settings → enable.
-- **Windows**: `certutil -addstore -f Root rootCA.pem` (admin).
-- **Android**: Settings → Security → Install a certificate → CA certificate.
+Devices on the LAN must trust the mkdev CA to connect without warnings.
 
 ### Caveats
 
@@ -195,10 +192,12 @@ Devices on the LAN must trust the mkdev CA to connect without warnings. Copy `~/
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
+## Acknowledgements
+
+mkdev's trust-store integration — Keychain/`security` on macOS, CA-bundle + `update-ca-*` on Linux, `crypt32.dll` `ROOT` store on Windows, and the NSS adjacent paths — is adapted from [**mkcert**](https://github.com/FiloSottile/mkcert) by Filippo Valsorda, BSD-3. Without that prior art, this project would be substantially harder. See [`LICENSE-MKCERT`](./LICENSE-MKCERT) for the upstream license.
+
+The TUI is built with [Charmbracelet's](https://charm.sh) Bubble Tea / Bubbles / Lipgloss. mDNS via [`hashicorp/mdns`](https://github.com/hashicorp/mdns). Local KV via [`bbolt`](https://github.com/etcd-io/bbolt).
+
 ## License
 
-[MIT](./LICENSE).
-
-## Author
-
-Venkatakrishna S.
+MIT   [LICENSE](./LICENSE).
