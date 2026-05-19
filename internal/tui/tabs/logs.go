@@ -70,12 +70,12 @@ func (l Logs) Update(msg tea.Msg) (Logs, tea.Cmd) {
 // 2*viewport.Height lines are retained so a scroll-up gesture still has
 // recent context without keeping the entire file in memory.
 func (l *Logs) refresh() {
-	f, err := os.Open(l.logPath)
+	f, err := os.Open(l.logPath) //nolint:gosec // logPath comes from runtime state dir
 	if err != nil {
 		l.viewport.SetContent(l.th.Dim.Render("log file not yet present at " + l.logPath))
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var lines []string
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {

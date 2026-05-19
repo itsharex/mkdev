@@ -2,6 +2,7 @@ package tui
 
 import "github.com/charmbracelet/bubbles/key"
 
+// KeyMap binds the named TUI actions to their key triggers.
 type KeyMap struct {
 	Add     key.Binding
 	Edit    key.Binding
@@ -23,10 +24,12 @@ type KeyMap struct {
 	Tab6    key.Binding
 }
 
+// ShortHelp returns the single-line help bindings shown in the footer.
 func (k KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{k.Add, k.Edit, k.Delete, k.Toggle, k.Share, k.Open, k.Help, k.Quit}
 }
 
+// FullHelp returns the expanded help-screen bindings grouped by row.
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Open, k.Toggle, k.Share},
@@ -37,6 +40,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 	}
 }
 
+// DefaultKeyMap is the built-in binding set used by the TUI.
 var DefaultKeyMap = KeyMap{
 	Add:     key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add")),
 	Edit:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit")),

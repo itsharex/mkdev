@@ -14,6 +14,7 @@ import (
 // RTTSource resolves the rolling RTT window for a domain. nil = no live RTT.
 type RTTSource func(domain string) []time.Duration
 
+// Domains is the routes table tab.
 type Domains struct {
 	th     styles.Theme
 	width  int
@@ -35,10 +36,12 @@ const (
 	domainsMinW    = 80
 )
 
+// NewDomains constructs a Domains tab without a live RTT source.
 func NewDomains(th styles.Theme, width, height int) Domains {
 	return NewDomainsWithRTT(th, width, height, nil)
 }
 
+// NewDomainsWithRTT constructs a Domains tab that surfaces live RTT samples.
 func NewDomainsWithRTT(th styles.Theme, width, height int, rtt RTTSource) Domains {
 	d := Domains{th: th, width: width, height: height, rtt: rtt}
 	cols := d.layoutCols()
@@ -103,10 +106,13 @@ func (d Domains) layoutCols() []table.Column {
 	}
 }
 
+// Title implements tabs.Tab.
 func (d Domains) Title() string { return "Domains" }
 
+// Init implements tea.Model; Domains has no async startup work.
 func (d Domains) Init() tea.Cmd { return nil }
 
+// Update handles route refresh and window-size events.
 func (d Domains) Update(in tea.Msg) (Domains, tea.Cmd) {
 	switch m := in.(type) {
 	case msg.RoutesRefreshed:
@@ -174,6 +180,7 @@ func shareCell(shared bool) string {
 	return "—"
 }
 
+// View renders the table, or an empty-state hint when no routes exist.
 func (d Domains) View() string {
 	if len(d.routes) == 0 {
 		hint := d.th.Dim.Render("no routes yet — press ") + d.th.FooterKey.Render("a") + d.th.Dim.Render(" to add")
@@ -182,6 +189,7 @@ func (d Domains) View() string {
 	return d.table.View()
 }
 
+// Selected returns the route under the table cursor, if any.
 func (d Domains) Selected() (store.Route, bool) {
 	if len(d.routes) == 0 {
 		return store.Route{}, false

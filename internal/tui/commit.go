@@ -21,7 +21,7 @@ func (m rootModel) commitAdd(p modals.AddPayload) tea.Cmd {
 		if err != nil {
 			return errMsg(err)
 		}
-		defer s.Close()
+		defer func() { _ = s.Close() }()
 		if _, err := s.GetRoute(p.Domain); err == nil {
 			return errMsg(fmt.Errorf("route exists: %s", p.Domain))
 		} else if !errors.Is(err, store.ErrNotFound) {
@@ -31,7 +31,15 @@ func (m rootModel) commitAdd(p modals.AddPayload) tea.Cmd {
 		if err := editor.Add(p.Domain); err != nil {
 			return errMsg(fmt.Errorf("hosts: %w", err))
 		}
-		r := store.Route{Domain: p.Domain, Target: p.Target, TLD: p.TLD, Enabled: true, Insecure: p.Insecure, Source: store.SourceAdHoc, AddedAt: time.Now().UTC()}
+		r := store.Route{
+			Domain:   p.Domain,
+			Target:   p.Target,
+			TLD:      p.TLD,
+			Enabled:  true,
+			Insecure: p.Insecure,
+			Source:   store.SourceAdHoc,
+			AddedAt:  time.Now().UTC(),
+		}
 		if err := s.PutRoute(r); err != nil {
 			if remErr := editor.Remove(p.Domain); remErr != nil {
 				slog.Error("inconsistent state", "domain", p.Domain, "primary", err, "rollback", remErr)
@@ -54,7 +62,7 @@ func (m rootModel) commitEdit(p modals.EditPayload) tea.Cmd {
 		if err != nil {
 			return errMsg(err)
 		}
-		defer s.Close()
+		defer func() { _ = s.Close() }()
 		cur, err := s.GetRoute(p.Domain)
 		if err != nil {
 			return errMsg(err)
@@ -78,7 +86,7 @@ func (m rootModel) commitDelete(r store.Route) tea.Cmd {
 		if err != nil {
 			return errMsg(err)
 		}
-		defer s.Close()
+		defer func() { _ = s.Close() }()
 		editor := hosts.NewGUIEditor(m.binPath)
 		if err := editor.Remove(r.Domain); err != nil {
 			return errMsg(fmt.Errorf("hosts: %w", err))
@@ -105,7 +113,7 @@ func (m rootModel) toggleRoute(r store.Route) tea.Cmd {
 		if err != nil {
 			return errMsg(err)
 		}
-		defer s.Close()
+		defer func() { _ = s.Close() }()
 		r.Enabled = !r.Enabled
 		if err := s.PutRoute(r); err != nil {
 			return errMsg(err)
@@ -125,7 +133,7 @@ func (m rootModel) toggleShare(r store.Route) tea.Cmd {
 		if err != nil {
 			return errMsg(err)
 		}
-		defer s.Close()
+		defer func() { _ = s.Close() }()
 		r.Shared = !r.Shared
 		if err := s.PutRoute(r); err != nil {
 			return errMsg(err)

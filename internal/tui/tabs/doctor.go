@@ -124,7 +124,8 @@ func (d Doctor) checkStaleCAs() CheckResult {
 		return CheckResult{"stale CAs", CheckWarn, err.Error()}
 	}
 	if len(fps) > 1 {
-		return CheckResult{"stale CAs", CheckWarn, fmt.Sprintf("%d mkdev CAs in keychain — older entries may need manual cleanup", len(fps))}
+		detail := fmt.Sprintf("%d mkdev CAs in keychain — older entries may need manual cleanup", len(fps))
+		return CheckResult{"stale CAs", CheckWarn, detail}
 	}
 	return CheckResult{"stale CAs", CheckOK, "single CA"}
 }
@@ -160,7 +161,7 @@ func (d Doctor) checkSharedRoutes() CheckResult {
 	if err != nil {
 		return CheckResult{"shared routes", CheckWarn, err.Error()}
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	routes, err := s.ListRoutes()
 	if err != nil {
 		return CheckResult{"shared routes", CheckWarn, err.Error()}

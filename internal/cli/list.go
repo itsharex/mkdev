@@ -26,7 +26,7 @@ func newListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			rs, err := s.ListRoutes()
 			if err != nil {
 				return err
@@ -38,7 +38,7 @@ func newListCmd() *cobra.Command {
 			if len(rs) == 0 {
 				// Header still emitted so machine consumers / tests can detect empty state.
 				if !styled() {
-					fmt.Fprintln(w, "DOMAIN\tTARGET\tENABLED\tSOURCE")
+					_, _ = fmt.Fprintln(w, "DOMAIN\tTARGET\tENABLED\tSOURCE")
 					return nil
 				}
 				Dim(w, "no routes — add one with `mkdev add <name> <host:port>`")
@@ -51,13 +51,13 @@ func newListCmd() *cobra.Command {
 			offStyle := lipgloss.NewStyle().Foreground(dimColor)
 
 			if styled() {
-				fmt.Fprintln(tw,
+				_, _ = fmt.Fprintln(tw,
 					headerStyle.Render("DOMAIN")+"\t"+
 						headerStyle.Render("TARGET")+"\t"+
 						headerStyle.Render("STATUS")+"\t"+
 						headerStyle.Render("SOURCE"))
 			} else {
-				fmt.Fprintln(tw, "DOMAIN\tTARGET\tENABLED\tSOURCE")
+				_, _ = fmt.Fprintln(tw, "DOMAIN\tTARGET\tENABLED\tSOURCE")
 			}
 			for _, r := range rs {
 				status := "✓ up"
@@ -67,10 +67,10 @@ func newListCmd() *cobra.Command {
 					st = offStyle
 				}
 				if styled() {
-					fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n",
+					_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n",
 						domainStyle.Render(r.Domain), r.Target, st.Render(status), r.Source)
 				} else {
-					fmt.Fprintf(tw, "%s\t%s\t%v\t%s\n", r.Domain, r.Target, r.Enabled, r.Source)
+					_, _ = fmt.Fprintf(tw, "%s\t%s\t%v\t%s\n", r.Domain, r.Target, r.Enabled, r.Source)
 				}
 			}
 			return tw.Flush()

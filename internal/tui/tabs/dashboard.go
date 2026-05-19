@@ -21,6 +21,8 @@ type DashSource struct {
 	Start time.Time
 }
 
+// Dashboard is the live overview tab: route counts, request totals, uptime,
+// CA expiry, and a sparkline of recent RPS.
 type Dashboard struct {
 	th     styles.Theme
 	src    DashSource
@@ -30,18 +32,23 @@ type Dashboard struct {
 	now    time.Time
 }
 
+// NewDashboard constructs a Dashboard bound to src.
 func NewDashboard(th styles.Theme, src DashSource) Dashboard {
 	return Dashboard{th: th, src: src, now: time.Now()}
 }
 
+// Title implements tabs.Tab.
 func (d Dashboard) Title() string { return "Dashboard" }
 
+// Init schedules the first dashboard tick.
 func (d Dashboard) Init() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg { return DashboardTickMsg(t) })
 }
 
+// DashboardTickMsg drives the per-second refresh of the dashboard view.
 type DashboardTickMsg time.Time
 
+// Update handles ticks, window-size changes, and route refresh messages.
 func (d Dashboard) Update(in tea.Msg) (Dashboard, tea.Cmd) {
 	switch m := in.(type) {
 	case tea.WindowSizeMsg:
@@ -56,6 +63,7 @@ func (d Dashboard) Update(in tea.Msg) (Dashboard, tea.Cmd) {
 	return d, nil
 }
 
+// View renders the dashboard cards, sparkline, and footer hint.
 func (d Dashboard) View() string {
 	w := d.width
 	if w <= 0 {
@@ -151,4 +159,3 @@ func humanDuration(d time.Duration) string {
 	days := int(d.Hours() / 24)
 	return fmt.Sprintf("%dd", days)
 }
-

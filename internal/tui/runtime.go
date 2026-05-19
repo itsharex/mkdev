@@ -63,7 +63,7 @@ func (rt *Runtime) LoadRoutes() ([]store.Route, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	return s.ListRoutes()
 }
 

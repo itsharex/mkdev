@@ -12,6 +12,7 @@ const (
 	rpsWindowSec = 60
 )
 
+// Stats tracks per-domain RTT samples and a rolling RPS window.
 type Stats struct {
 	mu  sync.RWMutex
 	buf map[string]*ring
@@ -30,10 +31,12 @@ type ring struct {
 	last time.Time
 }
 
+// NewStats returns an empty Stats collector.
 func NewStats() *Stats {
 	return &Stats{buf: make(map[string]*ring)}
 }
 
+// Record adds one RTT sample for domain and bumps the rolling RPS window.
 func (s *Stats) Record(domain string, d time.Duration) {
 	domain = strings.ToLower(domain)
 	s.totalReqs.Add(1)
@@ -80,6 +83,7 @@ func (s *Stats) bumpRPS() {
 	s.rpsBuf[now%rpsWindowSec]++
 }
 
+// Snapshot returns the last statsWindow RTT samples for domain, oldest first.
 func (s *Stats) Snapshot(domain string) []time.Duration {
 	domain = strings.ToLower(domain)
 	s.mu.RLock()
@@ -104,6 +108,7 @@ func (s *Stats) Snapshot(domain string) []time.Duration {
 	return out
 }
 
+// Last returns the timestamp of the most recent sample for domain.
 func (s *Stats) Last(domain string) time.Time {
 	domain = strings.ToLower(domain)
 	s.mu.RLock()

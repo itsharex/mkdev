@@ -347,7 +347,7 @@ func openInBrowser(domain string, port int) tea.Cmd {
 		if port != 443 {
 			url = fmt.Sprintf("%s:%d", url, port)
 		}
-		if err := exec.Command("open", url).Run(); err != nil {
+		if err := exec.Command("open", url).Run(); err != nil { //nolint:gosec // url is built from validated domain + numeric port
 			return errMsg(fmt.Errorf("open browser: %w", err))
 		}
 		return nil
@@ -424,5 +424,10 @@ func (m rootModel) View() string {
 	case modals.Confirm:
 		modalView = t.View()
 	}
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modalView, lipgloss.WithWhitespaceForeground(lipgloss.Color("236")))
+	return lipgloss.Place(
+		m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		modalView,
+		lipgloss.WithWhitespaceForeground(lipgloss.Color("236")),
+	)
 }

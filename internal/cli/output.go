@@ -26,7 +26,7 @@ var (
 )
 
 func writeLine(w io.Writer, prefix, msg string) {
-	fmt.Fprintln(w, prefix+msg)
+	_, _ = fmt.Fprintln(w, prefix+msg)
 }
 
 // Step prints a dim "→" step line (sub-task within a command).
@@ -79,28 +79,28 @@ func Info(w io.Writer, msg string) {
 // Dim prints a dim line with no glyph.
 func Dim(w io.Writer, msg string) {
 	if styled() {
-		fmt.Fprintln(w, lipgloss.NewStyle().Foreground(dimColor).Render(msg))
+		_, _ = fmt.Fprintln(w, lipgloss.NewStyle().Foreground(dimColor).Render(msg))
 	} else {
-		fmt.Fprintln(w, msg)
+		_, _ = fmt.Fprintln(w, msg)
 	}
 }
 
 // Banner prints a one-line app banner: bold name + version + tagline.
 func Banner(w io.Writer, name, version, tagline string) {
 	if !styled() {
-		fmt.Fprintf(w, "%s v%s · %s\n", name, version, tagline)
+		_, _ = fmt.Fprintf(w, "%s v%s · %s\n", name, version, tagline)
 		return
 	}
 	title := lipgloss.NewStyle().Bold(true).Foreground(infoColor).Render(name)
 	v := lipgloss.NewStyle().Foreground(dimColor).Render(" · v" + version)
 	t := lipgloss.NewStyle().Foreground(dimColor).Render(" · " + tagline)
-	fmt.Fprintln(w, title+v+t)
+	_, _ = fmt.Fprintln(w, title+v+t)
 }
 
 // Box wraps body in a rounded border with title at top.
 func Box(w io.Writer, title, body string) {
 	if !styled() {
-		fmt.Fprintf(w, "[%s]\n%s\n", title, body)
+		_, _ = fmt.Fprintf(w, "[%s]\n%s\n", title, body)
 		return
 	}
 	s := lipgloss.NewStyle().
@@ -108,5 +108,5 @@ func Box(w io.Writer, title, body string) {
 		BorderForeground(infoColor).
 		Padding(0, 1)
 	titleStyled := lipgloss.NewStyle().Bold(true).Foreground(infoColor).Render(title)
-	fmt.Fprintln(w, s.Render(titleStyled+"\n\n"+body))
+	_, _ = fmt.Fprintln(w, s.Render(titleStyled+"\n\n"+body))
 }

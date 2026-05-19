@@ -11,6 +11,9 @@ import (
 	"path/filepath"
 )
 
+// VerifyBinPath rejects bin if it is not a regular file, is group/world
+// writable, or is owned by a foreign uid — closing the obvious
+// privilege-escalation hole when bin is about to be invoked via sudo.
 func VerifyBinPath(bin string) error {
 	resolved, err := filepath.EvalSymlinks(bin)
 	if err != nil {

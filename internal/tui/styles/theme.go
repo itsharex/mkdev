@@ -2,6 +2,7 @@ package styles
 
 import "github.com/charmbracelet/lipgloss"
 
+// Theme is the resolved style + palette set used across the TUI.
 type Theme struct {
 	Name string
 
@@ -114,6 +115,7 @@ func solid(hex string) lipgloss.AdaptiveColor {
 	return lipgloss.AdaptiveColor{Light: hex, Dark: hex}
 }
 
+// ThemeNames lists the built-in theme identifiers accepted by NewTheme.
 func ThemeNames() []string {
 	return []string{"auto", "catppuccin-macchiato", "catppuccin-mocha", "dracula", "nord", "tokyonight"}
 }

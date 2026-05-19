@@ -73,7 +73,8 @@ func (e *Editor) Remove(host string) error {
 }
 
 func (e *Editor) runSudo(op, host string) error {
-	cmd := exec.Command("sudo", e.binPath, "hosts-helper", op, host)
+	// binPath verified by safeexec; host validated by ValidHostname.
+	cmd := exec.Command("sudo", e.binPath, "hosts-helper", op, host) //nolint:gosec
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -91,7 +92,8 @@ func (e *Editor) runGUI(op, host string) error {
 	}
 	inner := fmt.Sprintf("%s hosts-helper %s %s", e.binPath, op, host)
 	script := fmt.Sprintf("do shell script %q with administrator privileges", inner)
-	cmd := exec.Command("osascript", "-e", script)
+	// script built from validated binPath/host with quote-injection guard above.
+	cmd := exec.Command("osascript", "-e", script) //nolint:gosec
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("osascript: %w: %s", err, strings.TrimSpace(string(out)))

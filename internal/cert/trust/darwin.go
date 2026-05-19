@@ -32,7 +32,8 @@ func Install(certPath string) error {
 	if err != nil {
 		return fmt.Errorf("trust: abs path: %w", err)
 	}
-	cmd := exec.Command("sudo", "security", "add-trusted-cert",
+	// abs is filepath.Abs of operator-supplied cert path.
+	cmd := exec.Command("sudo", "security", "add-trusted-cert", //nolint:gosec
 		"-d", "-r", "trustRoot",
 		"-p", "ssl", "-p", "basic",
 		"-k", systemKeychain,
@@ -57,7 +58,8 @@ func Uninstall(certPath string) error {
 	if err != nil {
 		return fmt.Errorf("trust: abs path: %w", err)
 	}
-	cmd := exec.Command("sudo", "security", "remove-trusted-cert", "-d", abs)
+	// abs is filepath.Abs of operator-supplied cert path.
+	cmd := exec.Command("sudo", "security", "remove-trusted-cert", "-d", abs) //nolint:gosec
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("trust: remove-trusted-cert: %w: %s", err, strings.TrimSpace(string(out)))

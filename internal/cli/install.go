@@ -24,7 +24,7 @@ func newInstallCmd() *cobra.Command {
 func runInstall(cmd *cobra.Command, _ []string) error {
 	w := cmd.OutOrStdout()
 	Banner(w, "mkdev", version.Version, "local HTTPS for dev servers")
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w)
 
 	home, err := HomeDir()
 	if err != nil {
@@ -81,7 +81,7 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 		slog.Warn("multiple CAs in trust store", "count", len(fps))
 	}
 
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w)
 	Box(w, "install complete", "next:  mkdev add foo localhost:3000\n       mkdev")
 	return nil
 }

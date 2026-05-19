@@ -27,11 +27,12 @@ func launchTUI(cmd *cobra.Command) error {
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o700); err != nil {
 		return fmt.Errorf("tui: mkdir logs: %w", err)
 	}
-	f, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+	// logPath is built from validated state-dir + literal.
+	f, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("tui: open log: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	slog.SetDefault(slog.New(slog.NewTextHandler(io.Writer(f), &slog.HandlerOptions{Level: slog.LevelInfo})))
 
 	rt, err := tui.NewRuntime(cmd.Context(), home)

@@ -7,6 +7,7 @@ import (
 // PillKind selects the pill color and icon.
 type PillKind int
 
+// Pill kinds for StatusPill.
 const (
 	PillUp PillKind = iota
 	PillDown

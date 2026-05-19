@@ -50,7 +50,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	if existing, err := s.GetRoute(domain); err == nil {
 		return fmt.Errorf("route already exists: %s → %s", existing.Domain, existing.Target)

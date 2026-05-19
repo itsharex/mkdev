@@ -48,7 +48,7 @@ func newUninstallCmd() *cobra.Command {
 						}
 					}
 				}
-				s.Close()
+				_ = s.Close()
 			}
 
 			if purge {
@@ -61,7 +61,7 @@ func newUninstallCmd() *cobra.Command {
 				Info(w, "config preserved at "+home)
 				slog.Info("uninstall preserved state", "home", home)
 			}
-			fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w)
 			Success(w, "uninstalled")
 			return nil
 		},

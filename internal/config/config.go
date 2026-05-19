@@ -53,11 +53,11 @@ func Save(path string, c Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("config: mkdir: %w", err)
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //nolint:gosec // path is operator-supplied config location
 	if err != nil {
 		return fmt.Errorf("config: open: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if err := toml.NewEncoder(f).Encode(c); err != nil {
 		return fmt.Errorf("config: encode: %w", err)
 	}

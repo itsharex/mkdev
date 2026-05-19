@@ -44,7 +44,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	if _, err := s.GetRoute(domain); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return fmt.Errorf("no such route: %s", domain)
