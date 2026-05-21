@@ -24,7 +24,7 @@ mkdev serve                      # foreground TLS proxy
 curl https://myapp.local         # 200 from your local app
 ```
 
-https://github.com/user-attachments/assets/c539fff8-0d56-4d49-b033-00fef227ce92
+![mkdev demo](assets/mkdev-demo.gif)
 
 ## LAN sharing
 
