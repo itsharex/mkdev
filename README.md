@@ -50,10 +50,23 @@ mkdev's headline feature. Share a route to any device on the same Wi-Fi with rea
 brew install venkatkrishna07/tap/mkdev
 ```
 
+Upgrade later:
+
+```sh
+brew update
+brew upgrade mkdev
+```
+
 ### Go
 
 ```sh
 go install github.com/venkatkrishna07/mkdev/cmd/mkdev@latest
+```
+
+Upgrade to a specific version:
+
+```sh
+go install github.com/venkatkrishna07/mkdev/cmd/mkdev@v0.2.0
 ```
 
 ### Direct download
